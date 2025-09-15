@@ -1,0 +1,12 @@
+streamlit
+langchain
+python-dotenv
+openai
+langchain
+langchain-groq
+faker
+plotly
+pandas
+langchain-core
+langchain-openai
+langchain-community
