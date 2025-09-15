@@ -86,10 +86,9 @@ def setup_sidebar():
         model = st.selectbox(
             "Model", 
             [
-                "mistralai/mistral-7b-instruct:free",
-		"meta-llama/llama-3.1-8b-instruct:free",
-		"meta-llama/llama-4-scout:free",
-		"meta-llama/llama-4-maverick:free",
+                
+                "meta-llama/llama-4-scout:free",
+                "meta-llama/llama-4-maverick:free",
                 "google/gemma-7b-it:free",
                 "openchat/openchat-3.5-1210:free",
                 "gryphe/mythomax-l2-13b:free",
