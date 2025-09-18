@@ -10,43 +10,60 @@ from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplat
 from langchain_core.messages import SystemMessage
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain_openai import ChatOpenAI
-from faker import Faker # For generating mock data
-import plotly.express as px # For visualizations
+from faker import Faker  # For generating mock data
+import plotly.express as px  # For visualizations
+import requests
+from PIL import Image
+import io
 
 # Load environment variables
 load_dotenv()
 fake = Faker()
 
-# ========== SESSION STATE INITIALIZATION ========== #
+# Hugging Face API settings
+HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
+HF_API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+
+HEADERS = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
+
+def generate_image_huggingface(prompt):
+    payload = {
+        "inputs": prompt,
+        "options": {"wait_for_model": True}
+    }
+    response = requests.post(HF_API_URL, headers=HEADERS, json=payload)
+    if response.status_code != 200:
+        raise Exception(f"Hugging Face API error {response.status_code}: {response.text}")
+
+    image_bytes = response.content
+    image = Image.open(io.BytesIO(image_bytes))
+    return image
+
+# ========== SESSION STATE INITIALIZATION ==========
 def initialize_session_state():
-    """Initialize all session state variables"""
     defaults = {
-        'chat_history': [],
-        'conversation_start_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'current_domain': "General Knowledge",
-        'show_history': False,
-        'show_analytics': False,
-        'saved_conversations': {},
-        'user_profile': {
+        "chat_history": [],
+        "conversation_start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "current_domain": "General Knowledge",
+        "show_history": False,
+        "show_analytics": False,
+        "saved_conversations": {},
+        "user_profile": {
             "name": fake.name(),
             "expertise": fake.job(),
             "preferred_style": "Professional"
         },
-        'ai_persona': "Helpful Expert",
-        'active_tools': ["Web Search", "Code Interpreter"],
-        'conversation_ratings': []
+        "ai_persona": "Helpful Expert",
+        "active_tools": ["Web Search", "Code Interpreter"],
+        "conversation_ratings": []
     }
-    
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
-# ========== UI COMPONENTS ========== #
+# ========== UI COMPONENTS ==========
 def display_header():
-    """Display the application header with animated typing effect"""
-    st.set_page_config(page_title="ZEUS.ai", layout="wide", page_icon="🚀")
-    
-    # Animated header
+    st.set_page_config(page_title="ZEUS AI", layout="wide", page_icon="🚀")
     with st.container():
         col1, col2 = st.columns([4, 1])
         with col1:
@@ -67,279 +84,219 @@ def display_header():
                     50% { border-color: orange; }
                 }
             </style>
-            <h1 class="typing">ZEUS.ai Assistant</h1>
+            <h1 class="typing">ZEUS AI Assistant</h1>
             """, unsafe_allow_html=True)
             st.caption("Your hyper-intelligent, multi-modal AI companion")
-        
         with col2:
             st.image("logo.png", width=550)
 
-# ========== SIDEBAR CONFIGURATION ========== #
 def setup_sidebar():
-    """Configure all sidebar options"""
     with st.sidebar:
         st.title("⚙️ Control Panel")
         st.markdown("---")
-        
-        # Model Configuration
         st.subheader("AI Configuration")
         model = st.selectbox(
-            "Model", 
+            "Model",
             [
-                
                 "meta-llama/llama-4-scout:free",
                 "meta-llama/llama-4-maverick:free",
-                "google/gemma-7b-it:free",
-                "openchat/openchat-3.5-1210:free",
-                "gryphe/mythomax-l2-13b:free",
-		"huggingfaceh4/zephyr-7b-beta:free"
+                "deepseek/deepseek-chat-v3.1:free",
+                "google/gemini-2.0-flash-exp:free",
+                "mistralai/mistral-small-3.2-24b-instruct:free",
+                "nvidia/nemotron-nano-9b-v2:free"
             ],
             index=0,
             help="Select the AI engine powering your assistant"
         )
-        
         st.session_state.ai_persona = st.selectbox(
             "AI Persona",
             ["Helpful Expert", "Creative Genius", "Technical Specialist", "Friendly Advisor"],
-            index=0
+            index=0,
         )
-        
-        # User Profile
         st.subheader("👤 Your Profile")
         st.session_state.user_profile["preferred_style"] = st.selectbox(
             "Response Style",
             ["Professional", "Concise", "Detailed", "Casual"],
-            index=0
+            index=0,
         )
-        
-        # Knowledge Domain
         st.session_state.current_domain = st.selectbox(
             "🧠 Knowledge Focus",
-            ["General Knowledge", "Technical/IT", "Business", "Scientific", "Creative Arts", "Legal", "Medical"],
-            index=0
+            [
+                "General Knowledge",
+                "Technical/IT",
+                "Business",
+                "Scientific",
+                "Creative Arts",
+                "Legal",
+                "Medical",
+            ],
+            index=0,
         )
-        
-        # Tools
         st.subheader("🛠️ Active Tools")
         tools = st.multiselect(
             "Select tools to enable:",
-            options=["Web Search", "Code Interpreter", "Data Analysis", "Document Reader", "Image Generator"],
-            default=st.session_state.active_tools
+            options=[
+                "Web Search",
+                "Code Interpreter",
+                "Data Analysis",
+                "Document Reader",
+                "Image Generator",
+            ],
+            default=st.session_state.active_tools,
         )
         st.session_state.active_tools = tools
-        
-        # Navigation
         st.markdown("---")
         st.subheader("📂 Navigation")
         if st.button("📜 Conversation History"):
             st.session_state.show_history = not st.session_state.show_history
         if st.button("📊 Chat Analytics"):
             st.session_state.show_analytics = not st.session_state.show_analytics
-        
-        # System Info
         st.markdown("---")
         st.markdown(f"**Session Started:** {st.session_state.conversation_start_time}")
         st.markdown(f"**Messages:** {len(st.session_state.chat_history)}")
-        
         return model
 
-# ========== SPECIALIZED VIEWS ========== #
 def display_full_history():
-    """Display the complete conversation history"""
     st.title("📜 Full Conversation History")
     st.write(f"Conversation started at: {st.session_state.conversation_start_time}")
-    
     if not st.session_state.chat_history:
         st.info("No conversation history yet.")
     else:
-        # Search functionality
         search_term = st.text_input("🔍 Search conversations...")
-        
-        # Filter and display messages
-        filtered_history = [
-            msg for msg in st.session_state.chat_history
-            if search_term.lower() in msg['content'].lower()
-        ] if search_term else st.session_state.chat_history
-        
+        filtered_history = (
+            [msg for msg in st.session_state.chat_history if search_term.lower() in msg["content"].lower()]
+            if search_term else st.session_state.chat_history
+        )
         for msg in filtered_history:
-            with st.chat_message(name=msg['role']):
-                st.write(msg['content'])
-        
-        # Export options
+            with st.chat_message(name=msg["role"]):
+                st.write(msg["content"])
         st.download_button(
             "💾 Export as JSON",
             data=json.dumps(st.session_state.chat_history, indent=2),
-            file_name=f"conversation_{datetime.now().strftime('%Y%m%d')}.json"
+            file_name=f"conversation_{datetime.now().strftime('%Y%m%d')}.json",
         )
-    
     if st.button("⬅️ Back to Chat"):
         st.session_state.show_history = False
         st.rerun()
 
 def display_analytics():
-    """Display conversation analytics and insights"""
     st.title("📊 Conversation Analytics")
-    
     if not st.session_state.chat_history:
         st.warning("No data to analyze yet")
         return
-    
-    # Create dataframe from history
     df = pd.DataFrame(st.session_state.chat_history)
-    df['length'] = df['content'].apply(len)
-    df['time'] = pd.to_datetime(df.get('timestamp', datetime.now()))
-    
-    # Stats
+    df["length"] = df["content"].apply(len)
+    df["time"] = pd.to_datetime(df.get("timestamp", datetime.now()))
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Total Messages", len(df))
     with col2:
-        st.metric("Your Messages", sum(df['role'] == 'human'))
+        st.metric("Your Messages", sum(df["role"] == "human"))
     with col3:
-        st.metric("AI Messages", sum(df['role'] == 'AI'))
-    
-    # Visualizations
+        st.metric("AI Messages", sum(df["role"] == "AI"))
     tab1, tab2 = st.tabs(["Message Length", "Activity Over Time"])
-    
     with tab1:
-        fig = px.histogram(df, x='length', color='role', 
-                           title="Distribution of Message Lengths")
+        fig = px.histogram(df, x="length", color="role", title="Distribution of Message Lengths")
         st.plotly_chart(fig, use_container_width=True)
-    
     with tab2:
-        time_df = df.groupby([df['time'].dt.hour, 'role']).size().unstack()
+        time_df = df.groupby([df["time"].dt.hour, "role"]).size().unstack()
         fig = px.line(time_df, title="Message Activity by Hour")
         st.plotly_chart(fig, use_container_width=True)
-    
     if st.button("⬅️ Back to Chat"):
         st.session_state.show_analytics = False
         st.rerun()
 
-# ========== CORE CHAT FUNCTIONALITY ========== #
-def generate_response(user_input, groq_chat, memory):
-    """Generate AI response with enhanced processing"""
-    # Enhanced system prompt with context
+def generate_response(user_input, zeus_chat, memory):
     system_prompt = f"""
-    You are ZEUS.ai - a highly advanced AI assistant. 
+    You are zeus ai - a highly advanced AI assistant. 
     Current Mode: {st.session_state.current_domain}
     User Profile: {st.session_state.user_profile}
     Active Tools: {st.session_state.active_tools}
-    
     Respond as a {st.session_state.ai_persona} with a {st.session_state.user_profile['preferred_style']} style.
     """
-    
-    # Special processing for different domains
     if "Technical" in st.session_state.current_domain:
         system_prompt += "\nProvide detailed, accurate technical information with examples when possible."
     elif "Creative" in st.session_state.current_domain:
         system_prompt += "\nBe imaginative and original in your responses."
-    
-    prompt = ChatPromptTemplate.from_messages([
-        SystemMessage(content=system_prompt),
-        MessagesPlaceholder(variable_name="chat_history"),
-        HumanMessagePromptTemplate.from_template("{human_input}")
-    ])
-    
-    conversation = LLMChain(
-        llm=groq_chat,
-        prompt=prompt,
-        memory=memory,
-        verbose=True,
-        output_key="response"
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            SystemMessage(content=system_prompt),
+            MessagesPlaceholder(variable_name="chat_history"),
+            HumanMessagePromptTemplate.from_template("{human_input}"),
+        ]
     )
-    
-    # Simulate "typing" effect
-    with st.spinner("ZEUS.ai is thinking..."):
+    conversation = LLMChain(
+        llm=zeus_chat, prompt=prompt, memory=memory, verbose=True, output_key="response"
+    )
+    with st.spinner("zeus ai is thinking..."):
         start_time = time.time()
-        response = conversation({"human_input": user_input})['response']
+        response = conversation({"human_input": user_input})["response"]
         processing_time = time.time() - start_time
-    
-    # Add metadata to response
     response += f"\n\n*[Generated in {processing_time:.2f}s | {st.session_state.current_domain} Mode]*"
     return response
 
-def main_chat_interface(groq_chat, memory):
-    """Main chat interface with enhanced features"""
+def main_chat_interface(zeus_chat, memory):
     st.markdown(f"### 💬 Chat - **{st.session_state.current_domain}** Mode")
     st.caption(f"Persona: {st.session_state.ai_persona} | Style: {st.session_state.user_profile['preferred_style']}")
-    
-    # Display recent messages
     for msg in st.session_state.chat_history[-4:]:
-        with st.chat_message(name=msg['role']):
-            st.write(msg['content'])
-    
-    # User input with enhanced options
+        with st.chat_message(name=msg["role"]):
+            st.write(msg["content"])
     with st.form("chat_input_form"):
-        user_input = st.text_area("Your message:", height=100, 
-                                 placeholder="Type your message or upload a file...")
-        
+        user_input = st.text_area("Your message:", height=100, placeholder="Type your message or upload a file...")
         col1, col2 = st.columns([3, 1])
         with col1:
             submitted = st.form_submit_button("🚀 Send")
         with col2:
             if st.form_submit_button("✨ Enhance"):
                 user_input = f"[ENHANCED QUERY]: {user_input}\n\nPlease expand on this with additional details and examples."
-        
-        # File uploader would go here in a real implementation
-    
     if submitted and user_input:
-        # Add user message to history
-        st.session_state.chat_history.append({
-            'role': 'human',
-            'content': user_input,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        # Generate and display response
-        response = generate_response(user_input, groq_chat, memory)
-        
-        st.session_state.chat_history.append({
-            'role': 'AI',
-            'content': response,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        st.rerun()
+        st.session_state.chat_history.append({"role": "human", "content": user_input, "timestamp": datetime.now().isoformat()})
+        if "Image Generator" in st.session_state.active_tools and user_input.lower().startswith("generate image"):
+            prompt = user_input.lower().replace("generate image", "").strip()
+            try:
+                image = generate_image_huggingface(prompt)
+                st.session_state.chat_history.append({
+                    "role": "AI",
+                    "content": f"Generated image for prompt: {prompt}",
+                    "timestamp": datetime.now().isoformat(),
+                })
+                st.image(image, caption=prompt)
+            except Exception as e:
+                st.error(f"Error generating image: {str(e)}")
+        else:
+            response = generate_response(user_input, zeus_chat, memory)
+            st.session_state.chat_history.append({"role": "AI", "content": response, "timestamp": datetime.now().isoformat()})
+            st.rerun()
 
-# ========== MAIN APPLICATION ========== #
 def main():
     initialize_session_state()
     display_header()
-    
-    # Handle special views
     if st.session_state.show_history:
         display_full_history()
         return
     if st.session_state.show_analytics:
         display_analytics()
         return
-    
-    # Main chat interface
     model = setup_sidebar()
-    
     try:
-        openrouter_api_key = os.getenv('OPENROUTER_API_KEY')
+        openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         if not openrouter_api_key:
             st.error("API key not found. Please configure your .env file.")
             return
-
-        groq_chat = ChatOpenAI(
+        zeus_chat = ChatOpenAI(
             api_key=openrouter_api_key,
             base_url="https://openrouter.ai/api/v1",
             model_name=model,
-            temperature=0.7 if "Creative" in st.session_state.current_domain else 0.3
+            temperature=0.7 if "Creative" in st.session_state.current_domain else 0.3,
         )
-        
         memory = ConversationBufferWindowMemory(
-            k=5, # Fixed memory window size
+            k=5,
             memory_key="chat_history",
             input_key="human_input",
             output_key="response",
-            return_messages=True
+            return_messages=True,
         )
-        
-        main_chat_interface(groq_chat, memory)
-        
+        main_chat_interface(zeus_chat, memory)
     except Exception as e:
         st.error(f"System error: {str(e)}")
 
