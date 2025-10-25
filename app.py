@@ -78,7 +78,7 @@ def display_header():
 def setup_sidebar():
     """Configure all sidebar options"""
     with st.sidebar:
-        st.title("⚙ Control Panel")
+        st.title("⚙️ Control Panel")
         st.markdown("---")
         
         # Model Configuration
@@ -121,7 +121,7 @@ def setup_sidebar():
         )
         
         # Tools
-        st.subheader("🛠 Active Tools")
+        st.subheader("🛠️ Active Tools")
         tools = st.multiselect(
             "Select tools to enable:",
             options=["Web Search", "Code Interpreter", "Data Analysis", "Document Reader", "Image Generator"],
@@ -139,8 +139,8 @@ def setup_sidebar():
         
         # System Info
         st.markdown("---")
-        st.markdown(f"*Session Started:* {st.session_state.conversation_start_time}")
-        st.markdown(f"*Messages:* {len(st.session_state.chat_history)}")
+        st.markdown(f"**Session Started:** {st.session_state.conversation_start_time}")
+        st.markdown(f"**Messages:** {len(st.session_state.chat_history)}")
         
         return model
 
@@ -173,7 +173,7 @@ def display_full_history():
             file_name=f"conversation_{datetime.now().strftime('%Y%m%d')}.json"
         )
     
-    if st.button("⬅ Back to Chat"):
+    if st.button("⬅️ Back to Chat"):
         st.session_state.show_history = False
         st.rerun()
 
@@ -212,7 +212,7 @@ def display_analytics():
         fig = px.line(time_df, title="Message Activity by Hour")
         st.plotly_chart(fig, use_container_width=True)
     
-    if st.button("⬅ Back to Chat"):
+    if st.button("⬅️ Back to Chat"):
         st.session_state.show_analytics = False
         st.rerun()
 
@@ -261,7 +261,7 @@ def generate_response(user_input, groq_chat, memory):
 
 def main_chat_interface(groq_chat, memory):
     """Main chat interface with enhanced features"""
-    st.markdown(f"### 💬 Chat - *{st.session_state.current_domain}* Mode")
+    st.markdown(f"### 💬 Chat - **{st.session_state.current_domain}** Mode")
     st.caption(f"Persona: {st.session_state.ai_persona} | Style: {st.session_state.user_profile['preferred_style']}")
     
     # Display recent messages
@@ -344,5 +344,5 @@ def main():
     except Exception as e:
         st.error(f"System error: {str(e)}")
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     main()
