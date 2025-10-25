@@ -13,7 +13,7 @@ langchain-community
 pillow
 
 
-langchain
+langchain==0.3.27
 langchain-core
 langchain-openai
 streamlit
