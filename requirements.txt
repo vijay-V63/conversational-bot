@@ -11,3 +11,13 @@ langchain-core
 langchain-openai
 langchain-community
 pillow
+
+langchain
+langchain-core 
+langchain-openai 
+streamlit 
+python-dotenv 
+faker 
+plotly 
+requests 
+pillow
