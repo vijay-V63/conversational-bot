@@ -5,7 +5,7 @@ from datetime import datetime
 import time
 import json
 import pandas as pd
-from langchain.chains.llm import LLMChain
+from langchain.chains import LLMChain
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
 from langchain_core.messages import SystemMessage
 from langchain.memory import ConversationBufferWindowMemory
