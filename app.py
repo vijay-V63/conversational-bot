@@ -8,7 +8,7 @@ import pandas as pd
 from langchain.chains import LLMChain
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
 from langchain_core.messages import SystemMessage
-from langchain.chains.conversation.memory import ConversationBufferWindowMemory
+from langchain.memory import ConversationBufferWindowMemory
 from langchain_openai import ChatOpenAI
 from faker import Faker  # For generating mock data
 import plotly.express as px  # For visualizations
@@ -218,6 +218,7 @@ def generate_response(user_input, zeus_chat, memory):
         system_prompt += "\nProvide detailed, accurate technical information with examples when possible."
     elif "Creative" in st.session_state.current_domain:
         system_prompt += "\nBe imaginative and original in your responses."
+    
     prompt = ChatPromptTemplate.from_messages(
         [
             SystemMessage(content=system_prompt),
@@ -225,32 +226,56 @@ def generate_response(user_input, zeus_chat, memory):
             HumanMessagePromptTemplate.from_template("{human_input}"),
         ]
     )
+    
     conversation = LLMChain(
-        llm=zeus_chat, prompt=prompt, memory=memory, verbose=True, output_key="response"
+        llm=zeus_chat,
+        prompt=prompt,
+        memory=memory,
+        verbose=True
     )
+    
     with st.spinner("zeus ai is thinking..."):
         start_time = time.time()
-        response = conversation({"human_input": user_input})["response"]
+        response = conversation.invoke({"human_input": user_input})
         processing_time = time.time() - start_time
-    response += f"\n\n*[Generated in {processing_time:.2f}s | {st.session_state.current_domain} Mode]*"
-    return response
+    
+    # Extract the response text from the result
+    response_text = response["text"] if "text" in response else str(response)
+    response_text += f"\n\n*[Generated in {processing_time:.2f}s | {st.session_state.current_domain} Mode]*"
+    
+    return response_text
 
 def main_chat_interface(zeus_chat, memory):
     st.markdown(f"### 💬 Chat - **{st.session_state.current_domain}** Mode")
     st.caption(f"Persona: {st.session_state.ai_persona} | Style: {st.session_state.user_profile['preferred_style']}")
+    
+    # Display recent chat history
     for msg in st.session_state.chat_history[-4:]:
         with st.chat_message(name=msg["role"]):
             st.write(msg["content"])
-    with st.form("chat_input_form"):
+    
+    # Chat input form
+    with st.form("chat_input_form", clear_on_submit=True):
         user_input = st.text_area("Your message:", height=100, placeholder="Type your message or upload a file...")
         col1, col2 = st.columns([3, 1])
         with col1:
             submitted = st.form_submit_button("🚀 Send")
         with col2:
-            if st.form_submit_button("✨ Enhance"):
-                user_input = f"[ENHANCED QUERY]: {user_input}\n\nPlease expand on this with additional details and examples."
+            enhance_clicked = st.form_submit_button("✨ Enhance")
+    
+    if enhance_clicked and user_input:
+        user_input = f"[ENHANCED QUERY]: {user_input}\n\nPlease expand on this with additional details and examples."
+        submitted = True
+    
     if submitted and user_input:
-        st.session_state.chat_history.append({"role": "human", "content": user_input, "timestamp": datetime.now().isoformat()})
+        # Add user message to chat history
+        st.session_state.chat_history.append({
+            "role": "human", 
+            "content": user_input, 
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Handle image generation
         if "Image Generator" in st.session_state.active_tools and user_input.lower().startswith("generate image"):
             prompt = user_input.lower().replace("generate image", "").strip()
             try:
@@ -260,45 +285,67 @@ def main_chat_interface(zeus_chat, memory):
                     "content": f"Generated image for prompt: {prompt}",
                     "timestamp": datetime.now().isoformat(),
                 })
-                st.image(image, caption=prompt)
+                with st.chat_message("AI"):
+                    st.image(image, caption=prompt)
             except Exception as e:
                 st.error(f"Error generating image: {str(e)}")
         else:
+            # Generate AI response
             response = generate_response(user_input, zeus_chat, memory)
-            st.session_state.chat_history.append({"role": "AI", "content": response, "timestamp": datetime.now().isoformat()})
+            st.session_state.chat_history.append({
+                "role": "AI", 
+                "content": response, 
+                "timestamp": datetime.now().isoformat()
+            })
             st.rerun()
 
 def main():
     initialize_session_state()
     display_header()
+    
     if st.session_state.show_history:
         display_full_history()
         return
+        
     if st.session_state.show_analytics:
         display_analytics()
         return
+        
     model = setup_sidebar()
+    
     try:
         openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
         if not openrouter_api_key:
             st.error("API key not found. Please configure your .env file.")
             return
+            
+        # Initialize the chat model
         zeus_chat = ChatOpenAI(
             api_key=openrouter_api_key,
             base_url="https://openrouter.ai/api/v1",
-            model_name=model,
+            model=model,
             temperature=0.7 if "Creative" in st.session_state.current_domain else 0.3,
         )
+        
+        # Initialize memory
         memory = ConversationBufferWindowMemory(
             k=5,
             memory_key="chat_history",
-            input_key="human_input",
-            output_key="response",
             return_messages=True,
         )
+        
+        # Load existing chat history into memory
+        for msg in st.session_state.chat_history:
+            if msg["role"] == "human":
+                memory.chat_memory.add_user_message(msg["content"])
+            else:
+                memory.chat_memory.add_ai_message(msg["content"])
+        
         main_chat_interface(zeus_chat, memory)
+        
     except Exception as e:
         st.error(f"System error: {str(e)}")
+        st.info("Please check your API keys and internet connection.")
 
 if __name__ == "__main__":
     main()
